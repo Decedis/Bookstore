@@ -15,24 +15,23 @@ type Book struct {
 	Copies int
 }
 
-func (catalog *Catalog) SetCopies(ID string, copies int) error {
-	// this area needs to be updated to use the Persistent JSON data, and not the in memory data.
 
-	if copies < 0 {
+func (catalog *Catalog) SetCopies(ID string, copies int) error {
+    if copies < 0 {
 		return fmt.Errorf("negative number of copies: %d", copies) // this is the error we can return => !nil
 	}
-	var book Book = (*catalog)[ID] // need to verify  that the book is present 
-// however, even an invalid value fails to update
-	book.Copies = copies // TODO: I think the error is here
-// the data isnt changing like it should. The data itself is likely not changing at all. 
-fmt.Println("book.Copies =>", book.Copies)
-	//	book.Copies = copies // we need this to write to the file
+	book, ok := (*catalog)[ID] // need to verify  that the book is present
+	if !ok {
+		return fmt.Errorf("Error finding book")
+	}
+	book.Copies = copies
+	(*catalog)[ID] = book
+	fmt.Println("Catalog after 'update' => ", catalog)
 
 	return nil // this is an error we can return => nil
 }
 
 func (catalog *Catalog) Sync(file string) error {
-	// TODO or the error is in here
 	payload, err := json.Marshal(catalog)
 	if err != nil {
 		fmt.Printf("Error marshalling data: %v", err)
