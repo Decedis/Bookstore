@@ -21,8 +21,11 @@ func (catalog *Catalog) SetCopies(ID string, copies int) error {
 	if copies < 0 {
 		return fmt.Errorf("negative number of copies: %d", copies) // this is the error we can return => !nil
 	}
-	var book Book = (*catalog)[ID]
-	book.Copies = copies // TODO: i think the error is here
+	var book Book = (*catalog)[ID] // need to verify  that the book is present 
+// however, even an invalid value fails to update
+	book.Copies = copies // TODO: I think the error is here
+// the data isnt changing like it should. The data itself is likely not changing at all. 
+fmt.Println("book.Copies =>", book.Copies)
 	//	book.Copies = copies // we need this to write to the file
 
 	return nil // this is an error we can return => nil
