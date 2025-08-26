@@ -1,16 +1,21 @@
 package main
 
 import (
-	books "github.com/Decedis/bookstore"
-
 	"fmt"
+
+	books "github.com/Decedis/bookstore"
 )
 
 func main() {
 	fmt.Println("Books in stock: ...")
-	allBooks := books.GetAllBooks()
+	catalog, err := books.OpenCatalog("testdata/catalog.json")
 
-	for _, book := range allBooks {
-		fmt.Println(books.BookToString(book))
+	if err != nil {
+		fmt.Errorf("Could not open catalog: %v\n", err)
+		return
+	}
+
+	for _, book := range catalog.GetAllBooks() {
+		fmt.Println(book)
 	}
 }

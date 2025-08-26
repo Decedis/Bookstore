@@ -1,7 +1,11 @@
 package books
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
+	"os"
+	"slices"
 )
 
 type Book struct {
@@ -11,34 +15,61 @@ type Book struct {
 	Copies int
 }
 
-func BookToString(book Book) string {
+func (catalog *Catalog) SetCopies(ID string, copies int) error {
+	// this area needs to be updated to use the Persistent JSON data, and not the in memory data.
+
+	if copies < 0 {
+		return fmt.Errorf("negative number of copies: %d", copies) // this is the error we can return => !nil
+	}
+	var book Book = (*catalog)[ID]
+	book.Copies = copies // TODO: i think the error is here
+	//	book.Copies = copies // we need this to write to the file
+
+	return nil // this is an error we can return => nil
+}
+
+func (catalog *Catalog) Sync(file string) error {
+	// TODO or the error is in here
+	payload, err := json.Marshal(catalog)
+	if err != nil {
+		fmt.Printf("Error marshalling data: %v", err)
+	}
+	err = os.WriteFile(file, payload, 0o644)
+	if err != nil {
+		fmt.Printf("Error writing to file: %v\n", err)
+	}
+	return nil
+}
+
+func (book Book) String() string {
 	return fmt.Sprintf("%s by %s (copies: %v)", book.Title, book.Author, book.Copies)
 }
 
-var catalog = []Book{
-	{
-		ID:     "abc",
-		Title:  "In the Company of Cheerful Ladies",
-		Author: "Alexander McCall Smith",
-		Copies: 1,
-	},
-	{
-		ID:     "def",
-		Title:  "White Heat",
-		Author: "Dominic Sandbrook",
-		Copies: 2,
-	},
-}
-
-func GetAllBooks() []Book {
-	return catalog
-}
-
-func GetBook(id string) (Book, bool) {
-	for _, book := range catalog {
-		if book.ID == id {
-			return book, true
-		}
+func OpenCatalog(path string) (Catalog, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
-	return Book{}, false
+	defer file.Close() // defer means when the function ends
+	catalog := Catalog{}
+	err = json.NewDecoder(file).Decode(&catalog)
+	if err != nil {
+		return nil, err
+	}
+	return catalog, nil
+}
+
+type Catalog map[string]Book
+
+func (catalog Catalog) GetAllBooks() []Book {
+	return slices.Collect(maps.Values(catalog)) // turns it into a slice
+}
+
+func (catalog Catalog) GetBook(ID string) (Book, bool) {
+	book, ok := catalog[ID]
+	return book, ok
+}
+
+func (catalog Catalog) AddBook(book Book) {
+	catalog[book.ID] = book // works because book.ID matches the key in the map.
 }
