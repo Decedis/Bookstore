@@ -54,6 +54,53 @@ func TestGetAllBooks_ReturnsAllBooks(t *testing.T) {
 	}
 }
 
+// “a failing test that calls Sync on a catalog and then OpenCatalog on the resulting file.”
+func TestSyncWritesCatalogDataToFile(t *testing.T) {
+	t.Parallel()
+	original, err := os.ReadFile("testdata/catalog.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err := os.WriteFile("testdata/catalog.json", original, 0o644)
+		if err != nil {
+			t.Error("failed to restore test data: ", err)
+		}
+	}()
+	catalog, err := books.OpenCatalog("testdata/catalog.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := books.Catalog{
+		"abc": {
+			ID:     "abc",
+			Title:  "In the Company of Cheerful Ladies",
+			Author: "Alexander McCall Smith",
+			Copies: 1,
+		},
+		"xyz": {
+			ID:     "xyz",
+			Title:  "White Heat",
+			Author: "Dominic Sandbrook",
+			Copies: 5,
+		},
+	}
+	err = catalog.SetCopies("xyz", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = catalog.Sync("testdata/catalog.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := books.OpenCatalog("testdata/catalog.json")
+
+	if !maps.Equal(want, got) {
+		t.Fatalf("Catalogs don't match: want %v, got %v", want, got)
+	}
+}
+
 func TestOpenCatalog_LoadsCatalogDataFromFile(t *testing.T) {
 	t.Parallel()
 	catalog, err := books.OpenCatalog("testdata/catalog.json")

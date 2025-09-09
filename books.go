@@ -15,9 +15,8 @@ type Book struct {
 	Copies int
 }
 
-
 func (catalog *Catalog) SetCopies(ID string, copies int) error {
-    if copies < 0 {
+	if copies < 0 {
 		return fmt.Errorf("negative number of copies: %d", copies) // this is the error we can return => !nil
 	}
 	book, ok := (*catalog)[ID] // need to verify  that the book is present
@@ -38,7 +37,7 @@ func (catalog *Catalog) Sync(file string) error {
 	}
 	err = os.WriteFile(file, payload, 0o644)
 	if err != nil {
-		fmt.Printf("Error writing to file: %v\n", err)
+		return err
 	}
 	return nil
 }
@@ -61,6 +60,7 @@ func OpenCatalog(path string) (Catalog, error) {
 	return catalog, nil
 }
 
+// Methods on the Catalog type
 type Catalog map[string]Book
 
 func (catalog Catalog) GetAllBooks() []Book {
