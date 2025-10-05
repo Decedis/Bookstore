@@ -16,6 +16,7 @@ type Book struct {
 }
 
 func (catalog *Catalog) SetCopies(ID string, copies int) error {
+	// users can edit the catalog book directly, which is good in this case.
 	if copies < 0 {
 		return fmt.Errorf("negative number of copies: %d", copies) // this is the error we can return => !nil
 	}
@@ -30,12 +31,13 @@ func (catalog *Catalog) SetCopies(ID string, copies int) error {
 	return nil // this is an error we can return => nil
 }
 
-func (catalog *Catalog) Sync(file string) error {
-	payload, err := json.Marshal(catalog)
+func (catalog *Catalog) Sync(path string) error {
+	file, err := os.Create(path)
 	if err != nil {
-		fmt.Printf("Error marshalling data: %v", err)
+		return err
 	}
-	err = os.WriteFile(file, payload, 0o644)
+	defer file.Close()
+	err = json.NewEncoder(file).Encode(catalog)
 	if err != nil {
 		return err
 	}

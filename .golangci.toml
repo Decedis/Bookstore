@@ -1,12 +1,14 @@
-run:
-  concurrency: 4
-  timeout: 5m
-  tests: true
+version = 2
 
-linters:
-  enable:
-    - revive
-    - errcheck
-    - gosec
-  disable:
-    - megacheck
+[run]
+concurrency = 4
+timeout = "5m"
+tests = true
+
+[linters]
+enable = [
+  "revive",
+  "errcheck",
+  "gosec",
+]
+disable = []
