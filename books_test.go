@@ -16,8 +16,9 @@ import (
 func TestOpenCatalog_ReadsSameDataWrittenBySync(t *testing.T) {
 	t.Parallel()
 	catalog := getTestCatalog()
-	path := t.TempDir() + "/catalog"
-	err := catalog.Sync(path)
+	path := catalog.Path
+	// path := t.TempDir() + "/catalog"
+	err := catalog.Sync()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,6 +28,25 @@ func TestOpenCatalog_ReadsSameDataWrittenBySync(t *testing.T) {
 	}
 	bookList := newCatalog.GetAllBooks()
 	assertTestBooks(t, bookList)
+}
+
+func TestSetCopies_IsRaceFree(t *testing.T) {
+	t.Parallel()
+	catalog := getTestCatalog()
+	go func() {
+		for range 100 {
+			err := catalog.SetCopies("abc", 0)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}()
+	for range 100 {
+		_, err := catalog.GetCopies("abc")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestBookToString_FormatsBookInfoAsString(t *testing.T) {
@@ -130,15 +150,36 @@ func TestAddBook_AddsGivenBookToCatalog(t *testing.T) {
 	if ok {
 		t.Fatal("book already present")
 	}
-	catalog.AddBook(books.Book{
+	err := catalog.AddBook(books.Book{
 		ID:     "123",
 		Title:  "The Prize of all the Oceans",
 		Author: "Glyn Williams",
 		Copies: 2,
 	})
+	if err != nil {
+		t.Fatal("Added book not found")
+	}
 	_, ok = catalog.GetBook("123")
 	if !ok {
 		t.Fatal("added book not found")
+	}
+}
+
+func TestAddBook_ReturnsErrorIfIDExists(t *testing.T) {
+	t.Parallel()
+	catalog := getTestCatalog()
+	_, ok := catalog.GetBook("abc")
+	if !ok {
+		t.Fatal("Book doesn't exists within catalog")
+	}
+	err := catalog.AddBook(books.Book{
+		ID:     "abc",
+		Title:  "In the Company of Cheerful Ladies",
+		Author: "Alexander McCall Smith",
+		Copies: 1,
+	})
+	if err == nil {
+		t.Fatal("Want error for duplicate ID, got nil")
 	}
 }
 
@@ -163,7 +204,6 @@ func TestSetCopies_OnCatalogModifiesSpecificBook(t *testing.T) {
 	if book.Copies != 2 { // compare our values
 		t.Fatalf("want 2 copies after change, got %d", book.Copies)
 	}
-
 }
 
 func TestSetCopies_SetsNumberOfCopiesToGivenValue(t *testing.T) {
@@ -175,14 +215,14 @@ func TestSetCopies_SetsNumberOfCopiesToGivenValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if catalog["test"].Copies != 12 {
+	if catalog.data["test"].Copies != 12 {
 		t.Errorf("want 12 copies, got %d", catalog["test"].Copies)
 	}
 }
 
 func TestSetCopies_ReturnsErrorIfCopiesNegative(t *testing.T) {
 	t.Parallel()
-	catalog := books.Catalog{"test": {}}
+	catalog := books.Catalog.data{"test": {}}
 	err := catalog.SetCopies("test", -1)
 	if err == nil {
 		t.Error("want error for negative copies, got nil")
@@ -195,21 +235,37 @@ func TestSetCopies_ReturnsErrorIfCopiesNegative(t *testing.T) {
 	}
 }
 
-func getTestCatalog() books.Catalog {
-	return books.Catalog{
-		"abc": {
-			Title:  "In the Company of Cheerful Ladies",
-			Author: "Alexander McCall Smith",
-			Copies: 1,
-			ID:     "abc",
-		},
-		"xyz": {
-			Title:  "White Heat",
-			Author: "Dominic Sandbrook",
-			Copies: 2,
-			ID:     "xyz",
-		},
+func TestNewCatalog_CreatesEmptyCatalog(t *testing.T) {
+	t.Parallel()
+	catalog := books.NewCatalog()
+	books := catalog.GetAllBooks()
+	if len(books) > 0 {
+		t.Errorf("want empty catalog, got %#v", books)
 	}
+}
+
+func getTestCatalog() *books.Catalog {
+	catalog := books.NewCatalog()
+	path := t.TempDir + "/catalog"
+	err := catalog.AddBook(books.Book{
+		Title:  "In the Company of Cheerful Ladies",
+		Author: "Alexander McCall Smith",
+		Copies: 1,
+		ID:     "abc",
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = catalog.AddBook(books.Book{
+		Title:  "White Heat",
+		Author: "Dominic Sandbrook",
+		Copies: 2,
+		ID:     "xyz",
+	})
+	if err != nil {
+		panic(err)
+	}
+	return catalog
 }
 
 func assertTestBooks(t *testing.T, got []books.Book) {
