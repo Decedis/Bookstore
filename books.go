@@ -1,3 +1,5 @@
+// Package books provides types and methods to generate and manipulate Book and
+// Catalog data.
 package books
 
 import (
@@ -6,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"sync"
 )
 
 type Book struct {
@@ -16,28 +19,35 @@ type Book struct {
 }
 
 func (catalog *Catalog) SetCopies(ID string, copies int) error {
-	// users can edit the catalog book directly, which is good in this case.
-	if copies < 0 {
-		return fmt.Errorf("negative number of copies: %d", copies) // this is the error we can return => !nil
-	}
-	book, ok := (*catalog)[ID] // need to verify  that the book is present
+	book, ok := catalog.data[ID]
 	if !ok {
-		return fmt.Errorf("Error finding book")
+		return fmt.Errorf("ID %q not found", ID)
 	}
-	book.Copies = copies
-	(*catalog)[ID] = book
-	fmt.Println("Catalog after 'update' => ", catalog)
-
-	return nil // this is an error we can return => nil
+	err := book.SetCopies(copies)
+	if err != nil {
+		return err
+	}
+	catalog.data[ID] = book
+	return nil
 }
 
-func (catalog *Catalog) Sync(path string) error {
-	file, err := os.Create(path)
+func (catalog *Catalog) GetCopies(ID string) (int, error) {
+	book, ok := catalog.data[ID]
+	if !ok {
+		return 0, fmt.Errorf("ID %q not found", ID)
+	}
+	return book.Copies, nil
+}
+
+func (catalog *Catalog) Sync() error {
+	catalog.mu.RLock() // TODO what does this do?
+	defer catalog.mu.RUnlock()
+	file, err := os.Create(catalog.Path)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	err = json.NewEncoder(file).Encode(catalog)
+	err = json.NewEncoder(file).Encode(catalog.data)
 	if err != nil {
 		return err
 	}
@@ -48,32 +58,68 @@ func (book Book) String() string {
 	return fmt.Sprintf("%s by %s (copies: %v)", book.Title, book.Author, book.Copies)
 }
 
-func OpenCatalog(path string) (Catalog, error) {
+func NewCatalog() *Catalog {
+	return &Catalog{
+		mu:   &sync.RWMutex{},
+		data: map[string]Book{},
+	}
+}
+
+func OpenCatalog(path string) (*Catalog, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close() // defer means when the function ends
-	catalog := Catalog{}
-	err = json.NewDecoder(file).Decode(&catalog)
+	catalog := Catalog{
+		mu:   &sync.RWMutex{},
+		data: map[string]Book{},
+	}
+	err = json.NewDecoder(file).Decode(&catalog.data)
 	if err != nil {
 		return nil, err
 	}
-	return catalog, nil
+	catalog.Path = path // remember where you came from
+	return &catalog, nil
 }
 
-// Methods on the Catalog type
-type Catalog map[string]Book
-
-func (catalog Catalog) GetAllBooks() []Book {
-	return slices.Collect(maps.Values(catalog)) // turns it into a slice
+// SetCopies - A Methods on the Book type to set individual copy values on
+// instances of the Book struct.
+func (book *Book) SetCopies(copies int) error {
+	if copies < 0 {
+		return fmt.Errorf("cannot set copies to negative number: %d", copies)
+	}
+	book.Copies = copies
+	return nil
 }
 
-func (catalog Catalog) GetBook(ID string) (Book, bool) {
-	book, ok := catalog[ID]
+// Catalog is a composite type of a map of Books, with strings to directly reference the Book instances within the map.
+type Catalog struct {
+	mu   *sync.RWMutex
+	data map[string]Book
+	Path string
+}
+
+func (catalog *Catalog) GetAllBooks() []Book {
+	return slices.Collect(maps.Values(catalog.data)) // turns it into a slice
+}
+
+// GetBook method to fetch specific Book value via string ID. Returns either
+// the Book value and/or boolean value for success.
+func (catalog *Catalog) GetBook(ID string) (Book, bool) {
+	// mu := catalog.mu
+	// mu.Lock()
+	// defer mu.Unlock()
+	book, ok := catalog.data[ID]
 	return book, ok
 }
 
-func (catalog Catalog) AddBook(book Book) {
-	catalog[book.ID] = book // works because book.ID matches the key in the map.
+// AddBook method to add a value of type "Book" to composite type of Catalog.
+func (catalog *Catalog) AddBook(book Book) error {
+	_, ok := catalog.data[book.ID]
+	if ok {
+		return fmt.Errorf("Book already exists: %q", book.ID)
+	}
+	catalog.data[book.ID] = book // works because book.ID matches the key in the map.
+	return nil
 }
