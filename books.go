@@ -19,19 +19,23 @@ type Book struct {
 }
 
 func (catalog *Catalog) SetCopies(ID string, copies int) error {
+	catalog.mu.Lock()
+	defer catalog.mu.Unlock()
 	book, ok := catalog.data[ID]
 	if !ok {
 		return fmt.Errorf("ID %q not found", ID)
 	}
 	err := book.SetCopies(copies)
 	if err != nil {
-		return err
+		return err 
 	}
 	catalog.data[ID] = book
 	return nil
 }
 
 func (catalog *Catalog) GetCopies(ID string) (int, error) {
+	catalog.mu.Lock()
+	defer catalog.mu.Unlock()
 	book, ok := catalog.data[ID]
 	if !ok {
 		return 0, fmt.Errorf("ID %q not found", ID)
@@ -40,8 +44,8 @@ func (catalog *Catalog) GetCopies(ID string) (int, error) {
 }
 
 func (catalog *Catalog) Sync() error {
-	catalog.mu.RLock() // TODO what does this do?
-	defer catalog.mu.RUnlock()
+	catalog.mu.RLock()         // Set the read lock
+	defer catalog.mu.RUnlock() // Defer the read lock unlock
 	file, err := os.Create(catalog.Path)
 	if err != nil {
 		return err
@@ -71,16 +75,13 @@ func OpenCatalog(path string) (*Catalog, error) {
 		return nil, err
 	}
 	defer file.Close() // defer means when the function ends
-	catalog := Catalog{
-		mu:   &sync.RWMutex{},
-		data: map[string]Book{},
-	}
-	err = json.NewDecoder(file).Decode(&catalog.data)
+	catalog := NewCatalog()
+	err = json.NewDecoder(file).Decode(&catalog.data) // read this file and decode to this variable
 	if err != nil {
 		return nil, err
 	}
 	catalog.Path = path // remember where you came from
-	return &catalog, nil
+	return catalog, nil // was return &catalog, nil, why do we no longer need the address? Because of NewCatalog()?
 }
 
 // SetCopies - A Methods on the Book type to set individual copy values on
@@ -101,21 +102,25 @@ type Catalog struct {
 }
 
 func (catalog *Catalog) GetAllBooks() []Book {
+	catalog.mu.RLock()
+	defer catalog.mu.RUnlock()
 	return slices.Collect(maps.Values(catalog.data)) // turns it into a slice
 }
 
 // GetBook method to fetch specific Book value via string ID. Returns either
 // the Book value and/or boolean value for success.
 func (catalog *Catalog) GetBook(ID string) (Book, bool) {
-	// mu := catalog.mu
-	// mu.Lock()
-	// defer mu.Unlock()
+	catalog.mu.RLock()
+	defer catalog.mu.RUnlock()
+
 	book, ok := catalog.data[ID]
 	return book, ok
 }
 
 // AddBook method to add a value of type "Book" to composite type of Catalog.
 func (catalog *Catalog) AddBook(book Book) error {
+	catalog.mu.Lock()
+	defer catalog.mu.Unlock()
 	_, ok := catalog.data[book.ID]
 	if ok {
 		return fmt.Errorf("Book already exists: %q", book.ID)

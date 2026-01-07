@@ -16,13 +16,12 @@ import (
 func TestOpenCatalog_ReadsSameDataWrittenBySync(t *testing.T) {
 	t.Parallel()
 	catalog := getTestCatalog()
-	path := catalog.Path
-	// path := t.TempDir() + "/catalog"
+	catalog.Path = t.TempDir() + "/catalog"
 	err := catalog.Sync()
 	if err != nil {
 		t.Fatal(err)
 	}
-	newCatalog, err := books.OpenCatalog(path)
+	newCatalog, err := books.OpenCatalog(catalog.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +75,9 @@ func TestGetAllBooks_ReturnsAllBooks(t *testing.T) {
 func TestSyncWritesCatalogDataToFile(t *testing.T) {
 	t.Parallel()
 	catalog := getTestCatalog()
-	err := catalog.Sync("testdata/catalog.new")
+	catalog.Path = t.TempDir() + "/catalog"
+	// err := catalog.Sync("testdata/catalog.new")
+	err := catalog.Sync()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,22 +209,36 @@ func TestSetCopies_OnCatalogModifiesSpecificBook(t *testing.T) {
 
 func TestSetCopies_SetsNumberOfCopiesToGivenValue(t *testing.T) {
 	t.Parallel()
-	catalog := books.Catalog{"test": {
+	catalog := books.NewCatalog()
+	err := catalog.AddBook(books.Book{
+		ID:     "test",
 		Copies: 5,
-	}}
-	err := catalog.SetCopies("test", 12)
+	})
+	err = catalog.SetCopies("test", 12)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if catalog.data["test"].Copies != 12 {
-		t.Errorf("want 12 copies, got %d", catalog["test"].Copies)
+	book, ok := catalog.GetBook("test")
+	if !ok {
+		t.Fatal("test book not found in catalog")
+	}
+	if book.Copies != 12 {
+		t.Errorf("want 12 copies, got %d", book.Copies)
 	}
 }
 
 func TestSetCopies_ReturnsErrorIfCopiesNegative(t *testing.T) {
 	t.Parallel()
-	catalog := books.Catalog.data{"test": {}}
-	err := catalog.SetCopies("test", -1)
+	catalog := books.NewCatalog()
+	err := catalog.AddBook(
+		books.Book{
+			ID:     "test",
+			Copies: 1,
+		})
+	if err != nil {
+		t.Error("Could not AddBook: ", err)
+	}
+	err = catalog.SetCopies("test", -1)
 	if err == nil {
 		t.Error("want error for negative copies, got nil")
 		// We want the error to exist
@@ -246,7 +261,6 @@ func TestNewCatalog_CreatesEmptyCatalog(t *testing.T) {
 
 func getTestCatalog() *books.Catalog {
 	catalog := books.NewCatalog()
-	path := t.TempDir + "/catalog"
 	err := catalog.AddBook(books.Book{
 		Title:  "In the Company of Cheerful Ladies",
 		Author: "Alexander McCall Smith",
